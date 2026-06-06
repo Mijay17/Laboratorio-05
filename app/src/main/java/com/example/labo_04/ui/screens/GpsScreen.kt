@@ -3,33 +3,14 @@ package com.example.labo_04.ui.screens
 import android.Manifest
 import android.content.Intent
 import android.os.Build
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,27 +23,20 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.example.labo_04.DemoData
 import com.example.labo_04.services.GpsCaptureService
+import com.example.labo_04.data.local.entity.GpsGoogleEntity
+import com.example.labo_04.data.local.entity.GpsSensorsEntity
 import com.example.labo_04.ui.viewmodel.GpsViewModel
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import androidx.compose.ui.text.font.FontWeight
+import com.example.labo_04.ui.viewmodel.ComparativeGpsRecord
+import java.util.*
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun GpsScreen() {
+fun GpsScreen(viewModel: GpsViewModel) {
     val context = LocalContext.current
-    val app = context.applicationContext as DemoData
-    val vm: GpsViewModel = viewModel(
-        factory = GpsViewModel.Factory(app.gpsRepository)
-    )
 
-    val googlePoints by vm.googlePoints.collectAsStateWithLifecycle()
-    val sensorsPoints by vm.sensorsPoints.collectAsStateWithLifecycle()
-    val history by vm.comparativeHistory.collectAsStateWithLifecycle()
-
-    var capturando by remember { mutableStateOf(false) }
-
-    // Permisos necesarios
+    // Lista de permisos requeridos por el laboratorio
     val permisos = buildList {
         add(Manifest.permission.ACCESS_FINE_LOCATION)
         add(Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -72,38 +46,37 @@ fun GpsScreen() {
     }
     val estadoPermisos = rememberMultiplePermissionsState(permissions = permisos)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            "GNSS Tracking",
-            style = MaterialTheme.typography.headlineSmall
-        )
-        Text(
-            "Captura simultánea Google FLP + sensores crudos cada 10 s",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+    // Estado local para saber si el servicio está corriendo
+    var capturando by remember { mutableStateOf(false) }
 
+    // Recolectamos los datos reactivos del ViewModel
+    val googlePoints  by viewModel.googlePoints.collectAsStateWithLifecycle()
+    val sensorsPoints by viewModel.sensorsPoints.collectAsStateWithLifecycle()
+    val history       by viewModel.comparativeHistory.collectAsStateWithLifecycle()
+
+    val dateFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Bloqueo temprano: si no hay permisos mostramos Card de error y retornamos
         if (!estadoPermisos.allPermissionsGranted) {
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
+                colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(
-                        "Se requieren permisos de ubicación y notificaciones.",
+                        text  = "Se requieren permisos de ubicación para este laboratorio.",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { estadoPermisos.launchMultiplePermissionRequest() }
-                    ) {
+                    Button(onClick = { estadoPermisos.launchMultiplePermissionRequest() }) {
                         Text("Conceder permisos")
                     }
                 }
@@ -111,111 +84,61 @@ fun GpsScreen() {
             return@Column
         }
 
-        // Botón de captura
+        // Botón de control reactivo con cambio de color semántico
         Button(
             onClick = {
-                val intent = Intent(context, GpsCaptureService::class.java)
-                if (!capturando) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(intent)
-                    } else {
-                        context.startService(intent)
-                    }
-                } else {
-                    context.stopService(intent)
-                }
                 capturando = !capturando
+                val intent = Intent(context, GpsCaptureService::class.java)
+                if (capturando) context.startForegroundService(intent)
+                else            context.stopService(intent)
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (capturando)
-                    MaterialTheme.colorScheme.error
-                else
-                    MaterialTheme.colorScheme.primary
-            )
+            colors   = ButtonDefaults.buttonColors(
+                containerColor = if (capturando) MaterialTheme.colorScheme.error
+                else            MaterialTheme.colorScheme.primary
+            ),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Icon(
                 if (capturando) Icons.Default.Stop else Icons.Default.PlayArrow,
                 contentDescription = null
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                if (capturando) "Detener captura"
-                else "Capturar coordenada (cada 10 s)"
-            )
+            Text(if (capturando) "Detener captura" else "Capturar coordenada (cada 10 s)")
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Contadores en vivo
+        // Contadores en vivo utilizando tarjetas contenedoras
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier              = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Card(
-                modifier = Modifier.weight(1f),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                modifier = Modifier.weight(1f)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        "Google FLP",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        "${googlePoints.size}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        "registros",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Google FLP",   style = MaterialTheme.typography.titleSmall)
+                    Text("${googlePoints.size}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("registros",   style = MaterialTheme.typography.labelSmall)
                 }
             }
             Card(
-                modifier = Modifier.weight(1f),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
+                colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                modifier = Modifier.weight(1f)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        "Sensores GNSS",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Text(
-                        "${sensorsPoints.size}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Text(
-                        "registros",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Sensores GNSS", style = MaterialTheme.typography.titleSmall)
+                    Text("${sensorsPoints.size}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("registros",    style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            "Historial Comparativo (Sincronizado)",
-            style = MaterialTheme.typography.titleSmall
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+        Text("Historial Comparativo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-        val dateFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-
+        // Lista optimizada usando claves basadas en el timestamp
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier            = Modifier.fillMaxSize()
         ) {
             items(items = history, key = { it.timestamp }) { record ->
                 ComparativeCaptureCard(record, dateFormat)
@@ -225,116 +148,55 @@ fun GpsScreen() {
 }
 
 @Composable
-private fun ComparativeCaptureCard(
-    record: com.example.labo_04.ui.viewmodel.ComparativeGpsRecord,
-    dateFormat: SimpleDateFormat
-) {
+fun ComparativeCaptureCard(record: ComparativeGpsRecord, dateFormat: SimpleDateFormat) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        colors   = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Header: Hora de captura (común para ambos)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Instante: ${dateFormat.format(Date(record.timestamp))}",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "ID: ${record.timestamp % 10000}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            androidx.compose.material3.HorizontalDivider(
-                modifier = Modifier.fillMaxWidth(),
-                thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant
+            Text(
+                text       = "Instante: ${dateFormat.format(Date(record.timestamp))}",
+                style      = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color      = MaterialTheme.colorScheme.secondary
             )
-            Spacer(modifier = Modifier.height(8.dp))
-
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                // Columna Google
+
+                // Panel Izquierdo: Google FLP
                 Column(modifier = Modifier.weight(1f)) {
-                    val gHasSignal = record.google?.latitude != null
-                    Text(
-                        "GOOGLE FLP",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (gHasSignal) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                    )
-                    record.google?.let { g ->
-                        if (gHasSignal) {
-                            Text(
-                                String.format(Locale.US, "%.5f\n%.5f", g.latitude!!, g.longitude!!),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Text(
-                                "Acc: ±${g.accuracy?.toInt() ?: "—"}m",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        } else {
-                            Text(
-                                "SIN SEÑAL",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                            )
-                        }
-                    } ?: Text("—", style = MaterialTheme.typography.bodySmall)
+                    Text("GOOGLE FLP", style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    if (record.google != null) {
+                        Text("Lat: ${record.google.latitude}",    style = MaterialTheme.typography.bodySmall)
+                        Text("Lon: ${record.google.longitude}",   style = MaterialTheme.typography.bodySmall)
+                        Text("Prec: ±${record.google.accuracy}m", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text("Buscando...", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
 
-                androidx.compose.material3.VerticalDivider(
-                    modifier = Modifier.height(44.dp).padding(horizontal = 8.dp),
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-
-                // Columna Sensor
+                // Panel Derecho: Chip de Hardware (Sensores)
                 Column(modifier = Modifier.weight(1f)) {
-                    val hasSignal = record.sensors?.latitude != null
-                    Text(
-                        "SENSOR GNSS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (hasSignal) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error
-                    )
-                    record.sensors?.let { s ->
-                        if (hasSignal) {
-                            Text(
-                                String.format(Locale.US, "%.5f\n%.5f", s.latitude!!, s.longitude!!),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Text(
-                                "Alt: ${s.altitude?.toInt() ?: "—"}m",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
+                    Text("SENSOR GNSS", style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+                    if (record.sensors != null) {
+                        if (record.sensors.latitude != null) {
+                            Text("Lat: ${record.sensors.latitude}",         style = MaterialTheme.typography.bodySmall)
+                            Text("Lon: ${record.sensors.longitude}",        style = MaterialTheme.typography.bodySmall)
+                            Text("Alt: ${record.sensors.altitude ?: 0.0}m", style = MaterialTheme.typography.bodySmall)
                         } else {
-                            Text(
-                                "SIN SEÑAL",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                            )
-                            Text(
-                                "Indoors",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
+                            // Feedback visual inmediato en rojo si no hay fijación satelital
+                            Text("SIN SEÑAL",        style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                            Text("Indoors / Sin Fix", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error)
                         }
-                    } ?: Text("—", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text("Buscando...", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

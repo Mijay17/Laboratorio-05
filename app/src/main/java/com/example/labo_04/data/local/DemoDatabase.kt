@@ -14,16 +14,11 @@ import com.example.labo_04.data.local.entity.GpsSensorsEntity
 //import com.example.labo_04.data.local.entity.MediaEntity
 
 @Database(
-    entities = [
-        GpsGoogleEntity::class,
-        GpsSensorsEntity::class,
-        //MediaEntity::class,
-        //AudioEntity::class
-    ],
-    version = 3,
+    entities = [GpsGoogleEntity::class, GpsSensorsEntity::class],
+    version = 1,
     exportSchema = false
 )
-abstract class DemoDataDatabase : RoomDatabase() {
+abstract class DemoDatabase : RoomDatabase() {
 
     abstract fun gpsGoogleDao(): GpsGoogleDao
     abstract fun gpsSensorsDao(): GpsSensorsDao
@@ -31,15 +26,19 @@ abstract class DemoDataDatabase : RoomDatabase() {
     //abstract fun audioDao(): AudioDao
 
     companion object {
-        @Volatile private var INSTANCE: DemoDataDatabase? = null
+        @Volatile
+        private var INSTANCE: DemoDatabase? = null
 
-        fun getInstance(context: Context): DemoDataDatabase =
-            INSTANCE ?: synchronized(this) {
-                INSTANCE ?: Room.databaseBuilder(
+        fun getDatabase(context: Context): DemoDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
                     context.applicationContext,
-                    DemoDataDatabase::class.java,
-                    "fleet.db"
-                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
+                    DemoDatabase::class.java,
+                    "demo_data_db"
+                ).build()
+                INSTANCE = instance
+                instance
             }
+        }
     }
 }

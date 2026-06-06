@@ -18,9 +18,7 @@ data class ComparativeGpsRecord(
     val sensors: GpsSensorsEntity?
 )
 
-class GpsViewModel(
-    private val gpsRepository: GpsRepository
-) : ViewModel() {
+class GpsViewModel(private val gpsRepository: GpsRepository) : ViewModel() {
 
     val googlePoints = gpsRepository.googlePoints.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList()
@@ -52,10 +50,4 @@ class GpsViewModel(
             SharingStarted.WhileSubscribed(5_000),
             emptyList()
         )
-
-    class Factory(private val gpsRepository: GpsRepository) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            GpsViewModel(gpsRepository) as T
-    }
 }
