@@ -33,9 +33,14 @@ import java.util.*
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun GpsScreen(viewModel: GpsViewModel) {
-    val context = LocalContext.current
+fun GpsScreen() {
 
+    val context = LocalContext.current
+    val app = LocalContext.current.applicationContext as DemoData
+
+    val viewModel = remember {
+        GpsViewModel(app.gpsRepository)
+    }
     // Lista de permisos requeridos por el laboratorio
     val permisos = buildList {
         add(Manifest.permission.ACCESS_FINE_LOCATION)

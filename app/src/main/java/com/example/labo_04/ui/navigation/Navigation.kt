@@ -2,12 +2,17 @@ package com.example.labo_04.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Place
-
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -18,77 +23,73 @@ import com.example.labo_04.DemoData
 import com.example.labo_04.ui.screens.*
 import com.example.labo_04.ui.viewmodel.SessionViewModel
 
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.labo_04.ui.viewmodel.GpsViewModel
+@Composable
+fun Navigation() {
+    val app = LocalContext.current.applicationContext as DemoData
+    val sessionVm: SessionViewModel = viewModel(
+        factory = SessionViewModel.Factory(app.sessionManager)
+    )
 
-sealed class Ruta(val ruta: String, val etiqueta: String, val icono: ImageVector) {
-    object Gps    : Ruta("gps",    "Captura GNSS", Icons.Default.Place)
-    object Perfil : Ruta("perfil", "Mi Perfil",    Icons.Default.Person)
+    val isLoggedIn by sessionVm.isLoggedIn.collectAsStateWithLifecycle()
+
+    if (isLoggedIn) {
+        MainScaffold(sessionVm)
+    } else {
+        LoginScreen(onSubmit = sessionVm::login)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppNavigation(gpsViewModel: GpsViewModel, sessionViewModel: SessionViewModel) {
-    val navController = rememberNavController()
-    val currentBackStack by navController.currentBackStackEntryAsState()
-    val currentDestination = currentBackStack?.destination
-
-    val pestañas = listOf(Ruta.Gps, Ruta.Perfil)
-
-    val tituloActual = when (currentDestination?.route) {
-        Ruta.Gps.ruta    -> "Laboratorio 4: GNSS Dual"
-        Ruta.Perfil.ruta -> "Panel de Usuario"
-        else             -> "DemoData"
-    }
+private fun MainScaffold(sessionVm: SessionViewModel) {
+    val nav      = rememberNavController()
+    var selected by remember { mutableIntStateOf(0) }
+    val username by sessionVm.username.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(tituloActual) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor    = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                title   = { Text("DemoData — ${username ?: "?"}") },
+                actions = {
+                    IconButton(onClick = { sessionVm.logout() }) {
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout")
+                    }
+                }
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                pestañas.forEach { pestaña ->
-                    val seleccionada = currentDestination?.hierarchy
-                        ?.any { it.route == pestaña.ruta } == true
+            NavigationBar {
+                val tabs = listOf(
+                    "gps"     to (Icons.Default.LocationOn   to "GNSS"),
+                    "media"   to (Icons.Default.CameraAlt    to "Multimedia"),
+                    "audio"   to (Icons.Default.Mic          to "Audio"),
+                    "sync"    to (Icons.Default.CloudSync    to "Sync"),
+                    "notif"   to (Icons.Default.Notifications to "Notif"),
+                    "profile" to (Icons.Default.Person       to "Perfil")
+                )
+                tabs.forEachIndexed { idx, (route, iconLabel) ->
+                    val (icon, label) = iconLabel
                     NavigationBarItem(
-                        selected = seleccionada,
-                        onClick  = {
-                            navController.navigate(pestaña.ruta) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState    = true
-                            }
-                        },
-                        icon  = { Icon(pestaña.icono, contentDescription = pestaña.etiqueta) },
-                        label = { Text(pestaña.etiqueta) }
+                        selected = selected == idx,
+                        onClick  = { selected = idx; nav.navigate(route) },
+                        icon     = { Icon(icon, contentDescription = null) },
+                        label    = { Text(label) }
                     )
                 }
             }
         }
-    ) { paddingValues ->
+    ) { padding ->
         NavHost(
-            navController    = navController,
-            startDestination = Ruta.Gps.ruta,
-            modifier         = Modifier.padding(paddingValues)
+            navController    = nav,
+            startDestination = "gps",
+            modifier         = Modifier.padding(padding)
         ) {
-            composable(Ruta.Gps.ruta) {
-                GpsScreen(viewModel = gpsViewModel)
-            }
-            composable(Ruta.Perfil.ruta) {
-                ProfileScreen(
-                    sessionVm = sessionViewModel,
-                    onLogout  = { sessionViewModel.logout() }
-                )
-            }
+            composable("gps")     { GpsScreen() }
+            composable("media")   { MediaScreen() }
+            composable("audio")   { AudioScreen() }
+            composable("sync")    { SyncScreen() }
+            composable("notif")   { NotificationsScreen() }
+            composable("profile") { ProfileScreen(onLogout = sessionVm::logout, username = username) }
         }
     }
 }
