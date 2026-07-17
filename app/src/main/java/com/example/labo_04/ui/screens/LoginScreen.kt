@@ -21,7 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.example.labo_04.data.remote.NetworkConstants
 import kotlinx.coroutines.launch
@@ -41,37 +43,41 @@ fun LoginScreen(
     var error by remember { mutableStateOf("") }
     var verificando by remember { mutableStateOf(false) }
 
+    suspend fun processCredentialResult(result: androidx.credentials.GetCredentialResponse) {
+        val credential = result.credential
+        if (credential is CustomCredential &&
+            credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+            val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+            verificando = true
+            onGoogleLogin(idToken) { success ->
+                verificando = false
+                if (!success) error = "El servidor no reconoció la cuenta de Google"
+                }
+            }
+        }
     fun handleGoogleLogin() {
         scope.launch {
             try {
-                val googleIdOption = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(NetworkConstants.GOOGLE_WEB_CLIENT_ID)
-                    .setAutoSelectEnabled(true)
+                val signInOption = GetSignInWithGoogleOption
+                .Builder(NetworkConstants.GOOGLE_WEB_CLIENT_ID)
                     .build()
 
                 val request = GetCredentialRequest.Builder()
-                    .addCredentialOption(googleIdOption)
+                    .addCredentialOption(signInOption)
                     .build()
 
                 val result = credentialManager.getCredential(
                     context = context,
                     request = request
                 )
+                processCredentialResult(result)
 
-                val credential = result.credential
-                if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                    val idToken = googleIdTokenCredential.idToken
-
-                    verificando = true
-                    onGoogleLogin(idToken) { success ->
-                        verificando = false
-                        if (!success) error = "Error al autenticar con Google"
-                    }
-                }
+            } catch (e: GetCredentialCancellationException) {
+                error = ""
+            } catch (e: NoCredentialException) {
+                error = "No se pudo abrir el selector. Asegúrate de tener conexión y Google Play Services al día."
             } catch (e: Exception) {
-                error = "Cancelado o error: ${e.message}"
+                error = "Error al conectar con Google: ${e.localizedMessage}"
             }
         }
     }
