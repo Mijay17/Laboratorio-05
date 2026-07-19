@@ -113,6 +113,7 @@ class SessionViewModel(
                         finalUserId = meResponse.body()?.user?.userId
                     }
                     sessionManager.login("Google User", body.accessToken, body.refreshToken, finalUserId)
+                    fetchAndSyncToken() // Sincronizar token FCM después del login
                     onResult(true)
                 } else {
                     onResult(false)
