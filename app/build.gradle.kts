@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     kotlin("plugin.serialization") version "2.2.10"
+    //id("com.android.application")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -109,4 +111,12 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+
+    // Import the Firebase BoM
+    // Firebase FCM
+    // Import del Firebase BoM — fija versiones consistentes entre todos los artefactos de Firebase
+    implementation(platform("com.google.firebase:firebase-bom:34.15.0"))
+    // Con el BoM, no se especifica versión en las dependencias individuales de Firebase
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-messaging")
 }
